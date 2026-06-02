@@ -1,0 +1,102 @@
+@host = http://localhost:5000
+
+### Ingest a trade (first time -> 201 Created)
+POST {{host}}/api/trades
+Content-Type: application/json
+
+{
+  "external_id": "T-089",
+  "account": "ACC-123",
+  "symbol": "MSFT",
+  "side": "BUY",
+  "quantity": 100,
+  "price": 310.25,
+  "trade_time": "2025-01-15T10:30:00Z",
+  "currency": "USD"
+}
+
+### Resubmit the SAME trade (idempotent -> 200 OK, no duplicate)
+POST {{host}}/api/trades
+Content-Type: application/json
+
+{
+  "external_id": "T-001",
+  "account": "ACC-123",
+  "symbol": "MSFT",
+  "side": "BUY",
+  "quantity": 100,
+  "price": 310.25,
+  "trade_time": "2025-01-15T10:30:00Z",
+  "currency": "USD"
+}
+
+### Foreign-currency trade (enriched: notional_base = notional * rate)
+POST {{host}}/api/trades
+Content-Type: application/json
+
+{
+  "external_id": "T-002",
+  "account": "ACC-123",
+  "symbol": "SAP",
+  "side": "BUY",
+  "quantity": 50,
+  "price": 120.00,
+  "trade_time": "2025-01-15T09:00:00Z",
+  "currency": "EUR"
+}
+
+### Validation error (-> 400)
+POST {{host}}/api/trades
+Content-Type: application/json
+
+{
+  "external_id": "T-BAD",
+  "account": "ACC-123",
+  "symbol": "MSFT",
+  "side": "HOLD",
+  "quantity": -10,
+  "price": 0,
+  "trade_time": "2025-01-15T10:30:00Z",
+  "currency": "US"
+}
+
+### Report grouped by account + symbol (-> 200 JSON)
+GET {{host}}/api/reports/trades?from=2025-01-01&to=2026-02-06
+
+###############################################################################
+# SOAP enrichment service (CoreWCF) — what the WCF client calls under the hood.
+# Requires Enrichment:Provider = "Soap" (the default).
+###############################################################################
+
+### Call the SOAP currency service directly (GetRate EUR->USD -> Rate 1.09)
+POST {{host}}/soap/currency
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "http://trackerconnect/currency/GetRate"
+
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:t="http://trackerconnect/currency">
+  <soap:Body>
+    <t:GetRate>
+      <t:fromCurrency>EUR</t:fromCurrency>
+      <t:toCurrency>USD</t:toCurrency>
+      <t:asOf>2025-01-15T00:00:00</t:asOf>
+    </t:GetRate>
+  </soap:Body>
+</soap:Envelope>
+
+### Unknown currency -> empty result (GetRateResult is nil); the API maps this to HTTP 422
+POST {{host}}/soap/currency
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "http://trackerconnect/currency/GetRate"
+
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:t="http://trackerconnect/currency">
+  <soap:Body>
+    <t:GetRate>
+      <t:fromCurrency>ZZZ</t:fromCurrency>
+      <t:toCurrency>USD</t:toCurrency>
+      <t:asOf>2025-01-15T00:00:00</t:asOf>
+    </t:GetRate>
+  </soap:Body>
+</soap:Envelope>
+
+### Fetch the SOAP service WSDL
+GET {{host}}/soap/currency?wsdl

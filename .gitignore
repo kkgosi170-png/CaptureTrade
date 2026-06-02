@@ -1,0 +1,17 @@
+## .NET
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+.vs/
+
+## Rider / VS Code
+.idea/
+.vscode/
+
+## Local config & secrets — never commit credentials
+appsettings.*.local.json
+*.env
+.env
+secrets.json
